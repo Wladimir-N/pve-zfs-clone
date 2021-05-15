@@ -1,0 +1,122 @@
+#!/bin/bash
+error () {
+	if [[ $1 = snapshot ]]
+	then
+		echo 'Ошибка при создании снапшота'
+	elif [[ $1 = zfsclone ]]
+	then
+		echo 'Ошибка при создании клона из снапшота'
+	elif [[ $1 = config ]]
+	then
+		echo 'Ошибка при создании конфига контейнера'
+	fi
+	exit
+}
+VAR=$(whiptail --title "Меню скрипта" --menu \
+	"Вас приветствует скрипт для удобного клонирования и управления клонами в Proxmox" 23 77 16 \
+	"1" "Клонировать" \
+	"2" "Удалить клон" \
+	"3" "Создать шаблон на основе снапшота" \
+	"4" "Удалить шаблон на основе снапшота" \
+	"0" "Выход" 3>&1 1>&2 2>&3)
+exitstatus=$?
+if [ $exitstatus -eq 0 ]
+then
+	if [ $VAR -eq 0 ]
+	then
+		exit
+	elif [ $VAR -eq 1 ]
+	then
+		CLONE=$(whiptail --title "Что клонировать?" --menu \
+			"Выберите тип" 23 77 16 \
+			"1" "LXC" \
+			"2" "KVM" \
+			"0" "Выход" 3>&1 1>&2 2>&3)
+		exitstatus=$?
+		if [ $exitstatus -eq 0 ]
+		then
+			if [ $CLONE -eq 0 ]
+			then
+				exit
+			elif [ $CLONE -eq 1 ]
+			then
+				list=()
+				while read VMID Name
+				do
+					list+=("$VMID" "$Name")
+				done < <(pct list | awk '{print $1,$3}' | awk 'FNR>1')
+				LXC=$(whiptail --title "Какой контейнер?" --menu \
+					"Выберите контейнер, если контейнера нет в списке запустите скрипт на хосте где расположен контейнер" 23 77 16 \
+					"${list[@]}" \
+					"0" "Выход" 3>&1 1>&2 2>&3)
+				exitstatus=$?
+				if [ $exitstatus -eq 0 ]
+				then
+					if [ "$(pct config $LXC | grep -E '(rootfs|mp[0-9]+): .*,size=[0-9]+' | cut -d ':' -f 3 | cut -d ',' -f 1 | grep $LXC | wc -l)" -eq "$(pct config $LXC | grep -E '(rootfs|mp[0-9]+): .*,size=[0-9]+' | cut -d ':' -f 3 | cut -d ',' -f 1 |  wc -l)" ]
+					then
+						i=100
+						while [ $i -ne 0 ]
+						do
+							pvesh get /cluster/resources -type vm | awk '{print $2}' | grep / | cut -d '/' -f2 | grep $i
+							exitstatus=$?
+							if [ $exitstatus -eq 0 ]
+							then
+								let i=$i+1
+							else
+								NEWVMID=$i
+								i=0
+							fi
+						done
+						ok=0
+						while [ $ok -eq 0 ]
+						do
+							NEWVMID=$(whiptail --title  "Выбор VMID" --inputbox  "Введите VMID для клона" 10 60 $NEWVMID 3>&1 1>&2 2>&3)
+							exitstatus=$?
+							if [ $exitstatus -eq 0 ]
+							then
+								pvesh get /cluster/resources -type vm | awk '{print $2}' | grep / | cut -d '/' -f2 | grep $NEWVMID
+								exitstatus=$?
+								if [ $exitstatus -ne 0 ]
+								then
+									ok=1
+								else
+									whiptail --title  "Ошибка" --msgbox  "Вы выбрали VMID существующего контейнера" 10 60
+								fi
+							else
+								exit
+							fi
+						done
+						pct snapshot $LXC VMID$NEWVMID || error snapshot
+						while read subvolume
+						do
+							zfs clone $(df | grep $subvolume | awk '{print $1}')@VMID$NEWVMID $(df | grep $subvolume | awk '{print $1}' | sed "s/$LXC/$NEWVMID/") || error zfsclone
+						done < <(pct config $LXC | grep -E '(rootfs|mp[0-9]+): .*,size=[0-9]+' | cut -d ':' -f 3 | cut -d ',' -f 1)
+						pct config $LXC | sed -E "s/(rootfs|mp[0-9]+)(: .*:.*)$LXC(.*,size=[0-9]+)/\1\2$NEWVMID\3/g" > /etc/pve/lxc/$NEWVMID.conf || error config
+						echo -e '\033[0m\n\033[0m\033[31mСмените MAC и IP если это необходимо!!!\033[0m'
+					else
+						echo 'Субволюм контейнера который Вы хотите склонировать не имеет в своём имени VMID контейнера. Выполните клонирование в ручном режиме или пересоздайте субволюмы с правильными именами.'
+						exit
+					fi
+				else
+					exit
+				fi
+			elif [ $CLONE -eq 2 ]
+			then
+				echo 'Функционал ещё не реализован'
+			fi
+		else
+			exit
+		fi
+	elif [ $VAR -eq 2 ]
+	then
+		echo 'Функционал ещё не реализован'
+	elif [ $VAR -eq 3 ]
+	then
+		echo 'Функционал ещё не реализован'
+	elif [ $VAR -eq 4 ]
+	then
+		echo 'Функционал ещё не реализован'
+	fi
+else
+	exit
+fi
