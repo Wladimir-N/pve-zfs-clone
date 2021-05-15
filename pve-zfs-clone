@@ -103,7 +103,22 @@ then
 				fi
 			elif [ $CLONE -eq 2 ]
 			then
-				echo 'Функционал ещё не реализован'
+				list=()
+				while read VMID Name
+				do
+					list+=("$VMID" "$Name")
+				done < <(qm list | awk '{print $1,$2}' | awk 'FNR>1')
+				LXC=$(whiptail --title "Какую VM?" --menu \
+					"Выберите VM, если VM нет в списке запустите скрипт на хосте где расположена VM" 23 77 16 \
+					"${list[@]}" \
+					"0" "Выход" 3>&1 1>&2 2>&3)
+				exitstatus=$?
+				if [ $exitstatus -eq 0 ]
+				then
+					echo 'Функционал ещё не реализован'
+				else
+					exit
+				fi
 			fi
 		else
 			exit
