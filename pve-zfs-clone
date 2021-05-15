@@ -9,7 +9,6 @@ error () {
 	elif [[ $1 = config ]]
 	then
 		echo 'Ошибка при создании конфига контейнера'
-	fi
 	elif [[ $1 = destroyLXC ]]
 	then
 		echo 'Ошибка удаления LXC контейнера'
