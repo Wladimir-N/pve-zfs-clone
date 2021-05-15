@@ -53,50 +53,55 @@ then
 				exitstatus=$?
 				if [ $exitstatus -eq 0 ]
 				then
-					if [ "$(pct config $LXC | grep -E '(rootfs|mp[0-9]+): .*,size=[0-9]+' | cut -d ':' -f 3 | cut -d ',' -f 1 | grep $LXC | wc -l)" -eq "$(pct config $LXC | grep -E '(rootfs|mp[0-9]+): .*,size=[0-9]+' | cut -d ':' -f 3 | cut -d ',' -f 1 |  wc -l)" ]
+					if [ $LXC -eq 0 ]
 					then
-						i=100
-						while [ $i -ne 0 ]
-						do
-							pvesh get /cluster/resources --type vm --output-format yaml | grep vmid | awk '{print $2}' | grep -E "^$i$"
-							exitstatus=$?
-							if [ $exitstatus -eq 0 ]
-							then
-								let i=$i+1
-							else
-								NEWVMID=$i
-								i=0
-							fi
-						done
-						ok=0
-						while [ $ok -eq 0 ]
-						do
-							NEWVMID=$(whiptail --title  "Выбор VMID" --inputbox  "Введите VMID для клона" 10 60 $NEWVMID 3>&1 1>&2 2>&3)
-							exitstatus=$?
-							if [ $exitstatus -eq 0 ]
-							then
-								pvesh get /cluster/resources --type vm --output-format yaml | grep vmid | awk '{print $2}' | grep -E "^$NEWVMID$"
-								exitstatus=$?
-								if [ $exitstatus -ne 0 ]
-								then
-									ok=1
-								else
-									whiptail --title  "Ошибка" --msgbox  "Вы выбрали VMID существующего контейнера" 10 60
-								fi
-							else
-								exit
-							fi
-						done
-						pct snapshot $LXC VMID$NEWVMID || error snapshot
-						while read subvolume
-						do
-							zfs clone $(df | grep $subvolume | awk '{print $1}')@VMID$NEWVMID $(df | grep $subvolume | awk '{print $1}' | sed "s/$LXC/$NEWVMID/") || error zfsclone
-						done < <(pct config $LXC | grep -E '(rootfs|mp[0-9]+): .*,size=[0-9]+' | cut -d ':' -f 3 | cut -d ',' -f 1)
-						pct config $LXC | sed -E "s/(rootfs|mp[0-9]+)(: .*:.*)$LXC(.*,size=[0-9]+)/\1\2$NEWVMID\3/g" > /etc/pve/lxc/$NEWVMID.conf || error config
-						echo -e '\033[0m\n\033[0m\033[31mСмените MAC и IP если это необходимо!!!\033[0m'
-					else
-						echo 'Субволюм контейнера который Вы хотите склонировать не имеет в своём имени VMID контейнера. Выполните клонирование в ручном режиме или пересоздайте субволюмы с правильными именами.'
 						exit
+					else
+						if [ "$(pct config $LXC | grep -E '(rootfs|mp[0-9]+): .*,size=[0-9]+' | cut -d ':' -f 3 | cut -d ',' -f 1 | grep $LXC | wc -l)" -eq "$(pct config $LXC | grep -E '(rootfs|mp[0-9]+): .*,size=[0-9]+' | cut -d ':' -f 3 | cut -d ',' -f 1 |  wc -l)" ]
+						then
+							i=100
+							while [ $i -ne 0 ]
+							do
+								pvesh get /cluster/resources --type vm --output-format yaml | grep vmid | awk '{print $2}' | grep -E "^$i$"
+								exitstatus=$?
+								if [ $exitstatus -eq 0 ]
+								then
+									let i=$i+1
+								else
+									NEWVMID=$i
+									i=0
+								fi
+							done
+							ok=0
+							while [ $ok -eq 0 ]
+							do
+								NEWVMID=$(whiptail --title  "Выбор VMID" --inputbox  "Введите VMID для клона" 10 60 $NEWVMID 3>&1 1>&2 2>&3)
+								exitstatus=$?
+								if [ $exitstatus -eq 0 ]
+								then
+									pvesh get /cluster/resources --type vm --output-format yaml | grep vmid | awk '{print $2}' | grep -E "^$NEWVMID$"
+									exitstatus=$?
+									if [ $exitstatus -ne 0 ]
+									then
+										ok=1
+									else
+										whiptail --title  "Ошибка" --msgbox  "Вы выбрали VMID существующего контейнера" 10 60
+									fi
+								else
+									exit
+								fi
+							done
+							pct snapshot $LXC VMID$NEWVMID || error snapshot
+							while read subvolume
+							do
+								zfs clone $(df | grep $subvolume | awk '{print $1}')@VMID$NEWVMID $(df | grep $subvolume | awk '{print $1}' | sed "s/$LXC/$NEWVMID/") || error zfsclone
+							done < <(pct config $LXC | grep -E '(rootfs|mp[0-9]+): .*,size=[0-9]+' | cut -d ':' -f 3 | cut -d ',' -f 1)
+							pct config $LXC | sed -E "s/(rootfs|mp[0-9]+)(: .*:.*)$LXC(.*,size=[0-9]+)/\1\2$NEWVMID\3/g" > /etc/pve/lxc/$NEWVMID.conf || error config
+							echo -e '\033[0m\n\033[0m\033[31mСмените MAC и IP если это необходимо!!!\033[0m'
+						else
+							echo 'Субволюм контейнера который Вы хотите склонировать не имеет в своём имени VMID контейнера. Выполните клонирование в ручном режиме или пересоздайте субволюмы с правильными именами.'
+							exit
+						fi
 					fi
 				else
 					exit
