@@ -10,6 +10,10 @@ error () {
 	then
 		echo 'Ошибка при создании конфига контейнера'
 	fi
+	elif [[ $1 = destroyLXC ]]
+	then
+		echo 'Ошибка удаления LXC контейнера'
+	fi
 	exit
 }
 VAR=$(whiptail --title "Меню скрипта" --menu \
@@ -57,7 +61,7 @@ then
 						i=100
 						while [ $i -ne 0 ]
 						do
-							pvesh get /cluster/resources -type vm | awk '{print $2}' | grep / | cut -d '/' -f2 | grep $i
+							pvesh get /cluster/resources --type vm --output-format yaml | grep vmid | awk '{print $2}' | grep -E "^$i$"
 							exitstatus=$?
 							if [ $exitstatus -eq 0 ]
 							then
@@ -74,7 +78,7 @@ then
 							exitstatus=$?
 							if [ $exitstatus -eq 0 ]
 							then
-								pvesh get /cluster/resources -type vm | awk '{print $2}' | grep / | cut -d '/' -f2 | grep $NEWVMID
+								pvesh get /cluster/resources --type vm --output-format yaml | grep vmid | awk '{print $2}' | grep -E "^$NEWVMID$"
 								exitstatus=$?
 								if [ $exitstatus -ne 0 ]
 								then
@@ -109,7 +113,50 @@ then
 		fi
 	elif [ $VAR -eq 2 ]
 	then
-		echo 'Функционал ещё не реализован'
+		DELETE=$(whiptail --title "Что удалять?" --menu \
+			"Выберите тип" 23 77 16 \
+			"1" "LXC" \
+			"2" "KVM" \
+			"0" "Выход" 3>&1 1>&2 2>&3)
+		exitstatus=$?
+		if [ $exitstatus -eq 0 ]
+		then
+			if [ $DELETE -eq 0 ]
+			then
+				exit
+			elif [ $DELETE -eq 1 ]
+			then
+				list=()
+				while read VMID Name
+				do
+					list+=("$VMID" "$Name")
+				done < <(pct list | awk '{print $1,$3}' | awk 'FNR>1')
+				LXC=$(whiptail --title "Какой контейнер?" --menu \
+					"Выберите контейнер, если контейнера нет в списке запустите скрипт на хосте где расположен контейнер" 23 77 16 \
+					"${list[@]}" \
+					"0" "Выход" 3>&1 1>&2 2>&3)
+				exitstatus=$?
+				if [ $exitstatus -eq 0 ]
+				then
+					while [ "$(pct status $LXC | awk '{print $2}')" = "stopped" ]
+					do
+						pct stop $LXC || echo 'Ошибка остановки выбранного контейнера'
+					done
+					pct destroy $LXC || error destroyLXC
+					while read snapshot
+					do
+						zfs destroy $snapshot || echo "Ошибка удаления снапшота $snapshot"
+					done < <(zfs list -t snapshot | awk '{print $1}' | grep -E "@VMID$LXC$")
+				else
+					exit
+				fi
+			elif [ $DELETE -eq 2 ]
+			then
+				echo 'Функционал ещё не реализован'
+			fi
+		else
+			exit
+		fi
 	elif [ $VAR -eq 3 ]
 	then
 		echo 'Функционал ещё не реализован'
