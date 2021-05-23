@@ -19,13 +19,13 @@ VAR=$(whiptail --title "Меню скрипта" --menu \
 	"Вас приветствует скрипт для удобного клонирования и управления клонами в Proxmox" 23 77 16 \
 	"1" "Клонировать" \
 	"2" "Обновить клон" \
-	"3" "Создать шаблон на основе снапшота" 3>&1 1>&2 2>&3 || exit)
+	"3" "Создать шаблон на основе снапшота" 3>&1 1>&2 2>&3) || exit
 if [ $VAR -eq 1 ]
 then
 	CLONE=$(whiptail --title "Что клонировать?" --menu \
 		"Выберите тип" 23 77 16 \
 		"1" "LXC" \
-		"2" "KVM" 3>&1 1>&2 2>&3 || exit )
+		"2" "KVM" 3>&1 1>&2 2>&3) || exit
 	if [ $CLONE -eq 1 ]
 	then
 		list=()
@@ -35,14 +35,14 @@ then
 		done < <(pct list | awk '{print $1,$3}' | awk 'FNR>1')
 		LXC=$(whiptail --title "Какой контейнер?" --menu \
 			"Выберите контейнер, если контейнера нет в списке запустите скрипт на хосте где расположен контейнер" 23 77 16 \
-			"${list[@]}" 3>&1 1>&2 2>&3 || exit)
+			"${list[@]}" 3>&1 1>&2 2>&3) || exit
 
 		#проверяем, что контейнер не имеет нестандартных подключенных дисков
 		if [ "$(pct config $LXC | grep -E '(rootfs|mp[0-9]+): .*,size=[0-9]+' | cut -d ':' -f 3 | cut -d ',' -f 1 | grep $LXC | wc -l)" -eq "$(pct config $LXC | grep -E '(rootfs|mp[0-9]+): .*,size=[0-9]+' | cut -d ':' -f 3 | cut -d ',' -f 1 |  wc -l)" ]
 		then
 			while [ true ]
 			do
-				NEWVMID=$(whiptail --title  "Выбор VMID" --inputbox  "Введите VMID для клона" 10 60 `pvesh get /cluster/nextid` 3>&1 1>&2 2>&3 || exit)
+				NEWVMID=$(whiptail --title  "Выбор VMID" --inputbox  "Введите VMID для клона" 10 60 `pvesh get /cluster/nextid` 3>&1 1>&2 2>&3) || exit
 				#проверяем что пользователь указал не занятый ID
 				if [ $(cat /etc/pve/.vmlist | awk '{print $1}' | grep -E "$NEWVMID") ]
 				then
