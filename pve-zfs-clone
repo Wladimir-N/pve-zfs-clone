@@ -58,7 +58,13 @@ then
 				zfs clone $(df | grep $subvolume | awk '{print $1}')@VMID$NEWVMID $(df | grep $subvolume | awk '{print $1}' | sed "s/$LXC/$NEWVMID/") || error zfsclone
 			done < <(pct config $LXC | grep -E '(rootfs|mp[0-9]+): .*,size=[0-9]+' | cut -d ':' -f 3 | cut -d ',' -f 1)
 			pct config $LXC | sed -E "s/(rootfs|mp[0-9]+)(: .*:.*)$LXC(.*,size=[0-9]+)/\1\2$NEWVMID\3/g" > /etc/pve/lxc/$NEWVMID.conf || error config
-			echo -e '\033[0m\n\033[0m\033[31mСмените MAC и IP если это необходимо!!!\033[0m'
+			echo -e "\033[0m\n\033[0m\033[31m $LXC => $NEWVMID : контейнер успешно склонирован \033[0m"
+			# Change MAC if needed
+			if (whiptail --title  "Test Yes/No Box" --yesno  "Сгенерировать новый MAC адрес?" 10 60) then
+				pct config $NEWVMID | grep net0 | head -n 1 | awk 'gsub(/,hwaddr=[^,]+/, "")' | awk 'gsub(/net0:/, "")' | xargs -n 1 pct set $NEWVMID -net0
+			else
+				echo -e '\033[0m\n\033[0m\033[31mИсходный MAC адрес сохранен. Смените MAC и IP вручную, если это необходимо!!!\033[0m'
+			fi
 		else
 			echo 'Субволюм контейнера который Вы хотите склонировать не имеет в своём имени VMID контейнера. Выполните клонирование в ручном режиме или пересоздайте субволюмы с правильными именами.'
 			exit
