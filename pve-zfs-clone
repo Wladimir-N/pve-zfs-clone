@@ -161,6 +161,7 @@ then
 		
 		whiptail --title  "Успех" --msgbox  "Клон $LXC успешно обновлен" 10 60
 		echo -e "\033[0m\n\033[0m\033[31mКлон $LXC успешно обновлен\033[0m"
+		exit # It seems to be more convenient, then unlimited for loop
 	done
 	
 elif [ $VAR -eq 3 ]
