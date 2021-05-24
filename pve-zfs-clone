@@ -57,7 +57,13 @@ then
 				zfs clone $(df | grep $subvolume | awk '{print $1}')@VMID$NEWVMID $(df | grep $subvolume | awk '{print $1}' | sed "s/$LXC/$NEWVMID/") || error zfsclone
 			done < <(pct config $LXC | grep -E '(rootfs|mp[0-9]+): .*,size=[0-9]+' | cut -d ':' -f 3 | cut -d ',' -f 1)
 			pct config $LXC | sed -E "s/(rootfs|mp[0-9]+)(: .*:.*)$LXC(.*,size=[0-9]+)/\1\2$NEWVMID\3/g" > /etc/pve/lxc/$NEWVMID.conf || error config
-			echo -e '\033[0m\n\033[0m\033[31mСмените MAC и IP если это необходимо!!!\033[0m'
+			echo -e "\033[0m\n\033[0m\033[31m $LXC => $NEWVMID : контейнер успешно склонирован \033[0m"
+			# Change MAC if needed
+			if (whiptail --title  "Test Yes/No Box" --yesno  "Сгенерировать новый MAC адрес?" 10 60) then
+				pct config $NEWVMID | grep net0 | head -n 1 | awk 'gsub(/,hwaddr=[^,]+/, "")' | awk 'gsub(/net0:/, "")' | xargs -n 1 pct set $NEWVMID -net0
+			else
+				echo -e '\033[0m\n\033[0m\033[31mИсходный MAC адрес сохранен. Смените MAC и IP вручную, если это необходимо!!!\033[0m'
+			fi
 		else
 			echo 'Субволюм контейнера который Вы хотите склонировать не имеет в своём имени VMID контейнера. Выполните клонирование в ручном режиме или пересоздайте субволюмы с правильными именами.'
 			exit
@@ -83,7 +89,81 @@ then
 	fi
 elif [ $VAR -eq 2 ]
 then
-	echo 'Функционал ещё не реализован'
+	# Получаем список клонированных файловых систем
+	table=$(join \
+		<(sort <(pct list | tail -n +2 | awk '{print $1, "pct", $2, $3}' ; qm list | tail -n +2 | awk '{print $1, "qm", $3, $2}')) \
+		<(sort <(zfs list -H -o name,origin | awk '$2 != "-"' | awk 'match($1, /-[0-9][0-9][0-9]-disk/) { print substr($1, RSTART+1, 3), $0, substr($2, RSTART+1, 3)}')))
+	#echo "table" #debug
+	#echo "$table" #debug	
+	
+	# Вычисляем клонированные виртуальные машины и контейнеры
+	# sort -u группирует строки с одинаковыми парами VMID, VMID_origin. Такие пары будут появляться если VMID имеет несколько склонированных zfs дисков
+	# uniq -u -f5 убирает строки с одинаковыми VMID. Такие строки могут получиться, если VMID имеет несколько склонированных zfs дисков из разных VMID_origin. Такие VMID мы пропускаем
+	table_vmid=$(echo "$table" | awk '{print $1, $2, $3, $4, $7, $1}' | sort -u | uniq -u -f5 )
+	#echo "table_vmid" #debug
+	#echo "$table_vmid" #debug
+	
+	list=()
+	while read VMID Type State Name VMID_origin
+	do
+		list+=("$VMID" "$Name") # !!!! whiptail перестает работать после добавления других столбцов !!!! 
+	done < <(echo "$table_vmid")
+	
+	while [ true ]; do
+		LXC=$(whiptail --title "Какой контейнер?" --menu \
+			"Выберите контейнер, если контейнера нет в списке запустите скрипт на хосте где расположен контейнер" 23 77 16 \
+			"${list[@]}" 3>&1 1>&2 2>&3) || exit
+		
+		# stop ct or vm if needed
+		type=$(echo "$table_vmid" | awk "\$1 == $LXC" | awk '{print $2}')
+		state=$(echo "$table_vmid" | awk "\$1 == $LXC" | awk '{print $3}')
+		#echo "type: $type" #debug
+		#echo "state: $state" #debug
+		if [ $state == "running" ]; then
+			$type stop $LXC
+		fi
+		
+		zfs_clone_list=$(echo "$table" | awk "\$1 == $LXC" | awk '{print $5}')
+		#echo "zfs_clone_list: $zfs_clone_list" #debug
+		while read zfs; do
+			# destroy clone
+			# Следующая команда не выполнится, если целевая файловая система будет иметь дочерние клоны
+			# use -nvp for safe debug 
+			zfs destroy -r $zfs
+			exitstatus=$?
+			if [ $exitstatus -ne 0 ]; then
+				whiptail --title  "Ошибка" --msgbox  "Вероятно файловая система имеет дочерние клоны, см. ошибку в консоли" 10 60
+				echo -e "\033[0m\n\033[0m\033[31mВероятно файловая система имеет дочерние клоны, см. ошибку в консоли\033[0m"
+				exit
+			fi
+			#echo "$table" | awk "\$5 == \"${zfs}\""
+			
+			# destroy snap origin
+			zfs_snap_origin=$(echo "$table" | awk "\$5 == \"${zfs}\"" | awk '{print $6}')
+			#echo "zfs_snap_origin: $zfs_snap_origin" #debug
+			zfs destroy -r $zfs_snap_origin
+			exitstatus=$?
+			if [ $exitstatus -ne 0 ]; then
+				whiptail --title  "Ошибка" --msgbox  "Вероятно снимок имеет дочерние клоны, см. ошибку в консоли" 10 60
+				echo -e "\033[0m\n\033[0m\033[31mВероятно снимок имеет дочерние клоны, см. ошибку в консоли\033[0m"
+				exit
+			fi
+			
+			#create new zfs origin snapshot and clone
+			zfs snapshot $zfs_snap_origin
+			zfs clone $zfs_snap_origin $zfs
+		done < <(echo "$zfs_clone_list")
+		
+		#start stop ct or vm if needed
+		if [ $state == "running" ]; then
+			$type start $LXC
+		fi
+		
+		whiptail --title  "Успех" --msgbox  "Клон $LXC успешно обновлен" 10 60
+		echo -e "\033[0m\n\033[0m\033[31mКлон $LXC успешно обновлен\033[0m"
+		exit # It seems to be more convenient, then unlimited for loop
+	done
+	
 elif [ $VAR -eq 3 ]
 then
 	echo 'Функционал ещё не реализован'
