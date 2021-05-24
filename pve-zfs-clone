@@ -114,10 +114,14 @@ then
 			"Выберите контейнер, если контейнера нет в списке запустите скрипт на хосте где расположен контейнер" 23 77 16 \
 			"${list[@]}" 3>&1 1>&2 2>&3) || exit
 		
-		# stop ct or vm
+		# stop ct or vm if needed
 		type=$(echo "$table_vmid" | awk "\$1 == $LXC" | awk '{print $2}')
+		state=$(echo "$table_vmid" | awk "\$1 == $LXC" | awk '{print $3}')
 		#echo "type: $type" #debug
-		$type stop $LXC
+		#echo "state: $state" #debug
+		if [ $state == "running" ]; then
+			$type stop $LXC
+		fi
 		
 		zfs_clone_list=$(echo "$table" | awk "\$1 == $LXC" | awk '{print $5}')
 		#echo "zfs_clone_list: $zfs_clone_list" #debug
@@ -150,8 +154,11 @@ then
 			zfs clone $zfs_snap_origin $zfs
 		done < <(echo "$zfs_clone_list")
 		
-		#start stop ct or vm
-		$type start $LXC
+		#start stop ct or vm if needed
+		if [ $state == "running" ]; then
+			$type start $LXC
+		fi
+		
 		whiptail --title  "Успех" --msgbox  "Клон $LXC успешно обновлен" 10 60
 		echo -e "\033[0m\n\033[0m\033[31mКлон $LXC успешно обновлен\033[0m"
 	done
