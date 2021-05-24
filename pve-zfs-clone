@@ -92,7 +92,7 @@ then
 	# Получаем список клонированных файловых систем
 	table=$(join \
 		<(sort <(pct list | tail -n +2 | awk '{print $1, "pct", $2, $3}' ; qm list | tail -n +2 | awk '{print $1, "qm", $3, $2}')) \
-		<(zfs list -H -o name,origin | awk '$2 != "-"' | awk 'match($1, /-[0-9][0-9][0-9]-disk/) { print substr($1, RSTART+1, 3), $0, substr($2, RSTART+1, 3)}'))
+		<(sort <(zfs list -H -o name,origin | awk '$2 != "-"' | awk 'match($1, /-[0-9][0-9][0-9]-disk/) { print substr($1, RSTART+1, 3), $0, substr($2, RSTART+1, 3)}')))
 	#echo "table" #debug
 	#echo "$table" #debug	
 	
