@@ -9,14 +9,14 @@ https://t.me/ticketssettinru/187
 1) Клонируем репозиторий
 
 ```bash
-git clone git@github.com:Wladimir-N/pve-zfs-clone.git
+git clone https://github.com/Wladimir-N/pve-zfs-clone.git
 ```
 
 2) Создаем ссылку на исполняемый файл в директории bin
 
 ```bash
-chmod +x $(pwd)/pve-zfs-clone/pve-zfs-clone
-ln -s $(pwd)/pve-zfs-clone/pve-zfs-clone /usr/bin/pve-zfs-clone
+chmod +x pve-zfs-clone/pve-zfs-clone
+ln -s $(pwd)/pve-zfs-clone/pve-zfs-clone /usr/local/bin/pve-zfs-clone
 ```
 
 Для вызова утилиты необходимо выполнить `pve-zfs-clone` из любой папки.
