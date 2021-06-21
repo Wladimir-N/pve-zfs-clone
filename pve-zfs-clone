@@ -134,6 +134,7 @@ then
 		
 		zfs_clone_list=$(echo "$table" | awk "\$1 == $LXC" | awk '{print $5}')
 		#echo "zfs_clone_list: $zfs_clone_list" #debug
+		n=0
 		while read zfs; do
 			# destroy clone
 			# Следующая команда не выполнится, если целевая файловая система будет иметь дочерние клоны
@@ -151,8 +152,12 @@ then
 			
 			# re-create snapshot on origin
 			if [ "$($type listsnapshot $VMID_origin 2> /dev/null | grep VMID$LXC)" ]; then
-				$type delsnapshot $VMID_origin VMID$LXC || error snapshot_destroy
-				$type snapshot $VMID_origin VMID$LXC || error snapshot
+				if [ $n -eq 0]
+				then
+					$type delsnapshot $VMID_origin VMID$LXC || error snapshot_destroy
+					$type snapshot $VMID_origin VMID$LXC || error snapshot
+					let n=$n+1
+				fi
 			else
 				zfs destroy -r $zfs_snap_origin || error snapshot_destroy
 				zfs snapshot $zfs_snap_origin || error snapshot
