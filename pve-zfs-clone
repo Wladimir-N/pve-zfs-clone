@@ -152,7 +152,7 @@ then
 			
 			# re-create snapshot on origin
 			if [ "$($type listsnapshot $VMID_origin 2> /dev/null | grep VMID$LXC)" ]; then
-				if [ $n -eq 0]
+				if [ $n -eq 0 ]
 				then
 					$type delsnapshot $VMID_origin VMID$LXC || error snapshot_destroy
 					$type snapshot $VMID_origin VMID$LXC || error snapshot
