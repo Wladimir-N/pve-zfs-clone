@@ -1,5 +1,5 @@
 #!/bin/bash
-if [[ "$(zfs version | head -1)" != "$(zfs version | tail -1 | cut -d '-' -f 1,3,4)" ]]
+if [[ "$(zfs version | head -1 | cut -d '~' -f 1)" != "$(zfs version | tail -1 | cut -d '-' -f 1,3,4)" ]]
 then
 	echo "Не соответствие версий ZFS, проверьте вывод команды 'zfs version'. Вероятно необходимо сделать перезагрузку сервера."
 	exit
