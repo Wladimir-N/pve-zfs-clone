@@ -20,8 +20,11 @@ error () {
 	elif [[ $1 = destroyLXC ]]
 	then
 		echo 'Ошибка удаления LXC контейнера'
+	elif [[ $1 = duble ]]
+	then
+		echo 'У Вас уже есть такие диски'
 	fi
-	exit
+	exit 1
 }
 VAR=$(whiptail --title "Меню скрипта" --menu \
 	"Вас приветствует скрипт для удобного клонирования и управления клонами в Proxmox" 23 77 16 \
@@ -83,16 +86,39 @@ then
 		do
 			list+=("$VMID" "$Name")
 		done < <(qm list | awk '{print $1,$2}' | awk 'FNR>1')
-		LXC=$(whiptail --title "Какую VM?" --menu \
+		export QEMU=$(whiptail --title "Какую VM?" --menu \
 			"Выберите VM, если VM нет в списке запустите скрипт на хосте где расположена VM" 23 77 16 \
 			"${list[@]}" \
 			"0" "Выход" 3>&1 1>&2 2>&3)
 		exitstatus=$?
 		if [ $exitstatus -eq 0 ]
 		then
-			echo 'Функционал ещё не реализован'
+			for storage in `qm config $QEMU | grep -v 'parent: ' | grep -E '(ide|sata|virtio|scsi)[0-9]+: [A-Za-z0-9-]+:[A-Za-z0-9-]+,[A-Za-z0-9,=-]+' | cut -d ':' -f2`
+			do
+				if [ "$(pvesh get /storage/$storage --output-format yaml | grep 'type: ' | awk '{print $2}')" != "zfspool" ]
+				then
+					echo "У данной виртуальной машины есть диски не на ZFS"
+					exit 1
+				fi
+			done
+			export NEWVMID=$(whiptail --title  "Выбор VMID" --inputbox  "Введите VMID для клона" 10 60 `pvesh get /cluster/nextid` 3>&1 1>&2 2>&3) || exit
+			qm config $QEMU | grep -v 'parent: ' > /etc/pve/qemu-server/$NEWVMID.conf
+			qm snapshot $QEMU VMID$NEWVMID
+			while read storage name
+			do
+				zfs snapshot $(pvesh get /storage/$storage --output-format yaml | grep 'pool: ' | awk '{print $2}')/$name@VMID$NEWVMID
+			done < <(qm config $NEWVMID | grep -v 'parent: ' | grep -E '(ide|sata|virtio|scsi)[0-9]+: [A-Za-z0-9-]+:[A-Za-z0-9-]+-cloudinit,[A-Za-z0-9,=-]+' | cut -d ':' -f2,3 | cut -d ',' -f1 | tr ':' ' ')
+			while read storage name
+			do
+				zfs_origin=$(pvesh get /storage/$storage --output-format yaml | grep 'pool: ' | awk '{print $2}')/$name
+				zfs_clone=$(echo $zfs_origin | sed "s/$QEMU/$NEWVMID/g")
+				zfs get all $zfs_clone && error duble
+				zfs clone $zfs_origin@VMID$NEWVMID $zfs_clone
+				sed -i "s/$storage:$name/$storage:$(echo $name | sed "s/$QEMU/$NEWVMID/g")/g" /etc/pve/qemu-server/$NEWVMID.conf
+			done < <(qm config $NEWVMID | grep -v 'parent: ' | grep -E '(ide|sata|virtio|scsi)[0-9]+: [A-Za-z0-9-]+:[A-Za-z0-9-]+,[A-Za-z0-9,=-]+' | cut -d ':' -f2,3 | cut -d ',' -f1 | tr ':' ' ')
+			echo -e "\033[0m\n\033[0m\033[31m $QEMU => $NEWVMID : Виртуалка склонирована, проверьте настройки, смените MAC интерфейсов при необходимости и настройки ip \033[0m"
 		else
-			exit
+			exit 1
 		fi
 	fi
 elif [ $VAR -eq 2 ]
