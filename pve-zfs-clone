@@ -49,7 +49,7 @@ then
 			"${list[@]}" 3>&1 1>&2 2>&3) || exit
 
 		#проверяем, что контейнер не имеет нестандартных подключенных дисков
-		if [ "$(pct config $LXC | grep -E '(rootfs|mp[0-9]+): .*,size=[0-9]+' | cut -d ':' -f 3 | cut -d ',' -f 1 | grep $LXC | wc -l)" -eq "$(pct config $LXC | grep -E '(rootfs|mp[0-9]+): .*,size=[0-9]+' | cut -d ':' -f 3 | cut -d ',' -f 1 |  wc -l)" ]
+		if [ "$(pct config $LXC | grep -E '(rootfs|mp[0-9]+): .*,size=[0-9]+' | cut -d ':' -f 3 | cut -d ',' -f 1 | cut -d / -f2 | grep $LXC | wc -l)" -eq "$(pct config $LXC | grep -E '(rootfs|mp[0-9]+): .*,size=[0-9]+' | cut -d ':' -f 3 | cut -d ',' -f 1 | cut -d / -f2 | wc -l)" ]
 		then
 			while [ true ]
 			do
@@ -66,7 +66,7 @@ then
 			while read subvolume
 			do
 				zfs clone $(df | grep $subvolume | awk '{print $1}')@VMID$NEWVMID $(df | grep $subvolume | awk '{print $1}' | sed "s/$LXC/$NEWVMID/") || error zfsclone
-			done < <(pct config $LXC | grep -E '(rootfs|mp[0-9]+): .*,size=[0-9]+' | cut -d ':' -f 3 | cut -d ',' -f 1)
+			done < <(pct config $LXC | grep -E '(rootfs|mp[0-9]+): .*,size=[0-9]+' | cut -d ':' -f 3 | cut -d ',' -f 1 | cut -d / -f2)
 			pct config $LXC | sed -E "s/(rootfs|mp[0-9]+)(: .*:.*)$LXC(.*,size=[0-9]+)/\1\2$NEWVMID\3/g" > /etc/pve/lxc/$NEWVMID.conf || error config
 			echo -e "\033[0m\n\033[0m\033[31m $LXC => $NEWVMID : контейнер успешно склонирован \033[0m"
 			# Change MAC if needed
