@@ -5,38 +5,33 @@ then
 	exit
 fi
 error () {
-	if [[ $1 = snapshot ]]
-	then
-		echo 'Ошибка при создании снапшота'
-	elif [[ $1 = snapshot_destroy ]]
-	then
-		echo 'Ошибка при удалении снапшота'
-	elif [[ $1 = zfsclone ]]
-	then
-		echo 'Ошибка при создании клона из снапшота'
-	elif [[ $1 = config ]]
-	then
-		echo 'Ошибка при создании конфига контейнера'
-	elif [[ $1 = destroyLXC ]]
-	then
-		echo 'Ошибка удаления LXC контейнера'
-	elif [[ $1 = duble ]]
-	then
-		echo 'У Вас уже есть такие диски'
-	fi
+	case $1 in
+		snapshot) echo 'Ошибка при создании снапшота' ;;
+		snapshot_destroy) echo 'Ошибка при удалении снапшота' ;;
+		zfsclone) echo 'Ошибка при создании клона из снапшота' ;;
+		config) echo 'Ошибка при создании конфига контейнера' ;;
+		destroyLXC) echo 'Ошибка удаления LXC контейнера' ;;
+		duble) echo 'У Вас уже есть такие диски' ;;
+	esac
 	exit 1
 }
+
+# Главное меню
 VAR=$(whiptail --title "Меню скрипта" --menu \
 	"Вас приветствует скрипт для удобного клонирования и управления клонами в Proxmox" 23 77 16 \
 	"1" "Клонировать" \
 	"2" "Обновить клон" \
 	"3" "Создать шаблон на основе снапшота" 3>&1 1>&2 2>&3) || exit
+
+# Опция клонирования
 if [ $VAR -eq 1 ]
 then
 	CLONE=$(whiptail --title "Что клонировать?" --menu \
 		"Выберите тип" 23 77 16 \
 		"1" "LXC" \
 		"2" "KVM" 3>&1 1>&2 2>&3) || exit
+
+	# Клонирование LXC
 	if [ $CLONE -eq 1 ]
 	then
 		list=()
